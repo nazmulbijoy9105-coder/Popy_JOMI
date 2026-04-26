@@ -1,0 +1,325 @@
+// POPY — Bangladesh Property Intelligence Platform
+// Prisma Schema — PostgreSQL (Render Free Tier)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  agent
+  investor
+  developer
+  buyer
+}
+
+enum Plan {
+  free
+  agent
+  investor
+  developer
+  enterprise
+}
+
+enum PropertyType {
+  apartment
+  house
+  plot
+  commercial
+}
+
+enum PropertyStatus {
+  active
+  urgent
+  sold
+  pending
+}
+
+enum RiskLevel {
+  low
+  medium
+  high
+}
+
+enum LegalStatus {
+  clean
+  pending
+  disputed
+}
+
+enum LeadUrgency {
+  hot
+  warm
+  cold
+}
+
+enum LeadType {
+  seller
+  buyer
+}
+
+enum AlertType {
+  new_listing
+  price_drop
+  urgent_sale
+  lead
+  legal
+}
+
+enum AlertPriority {
+  high
+  medium
+  low
+}
+
+enum ScraperStatus {
+  pending
+  running
+  done
+  failed
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?
+  phone         String?
+  role          UserRole  @default(agent)
+  plan          Plan      @default(free)
+  emailVerified DateTime?
+  image         String?
+  apiKey        String?   @unique @default(cuid())
+
+  // Relations
+  leads         Lead[]    @relation("AssignedLeads")
+  alerts        Alert[]
+  alertRules    AlertRule[]
+  legalChecks   LegalCheck[]
+  savedProperties SavedProperty[]
+  sessions      Session[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("sessions")
+}
+
+model Property {
+  id             String         @id @default(cuid())
+  title          String
+  description    String?
+  price          BigInt
+  pricePerSqft   Int?
+  location       String
+  area           String?
+  district       String         @default("Dhaka")
+  division       String         @default("Dhaka")
+  sqft           Int?
+  bedrooms       Int            @default(0)
+  bathrooms      Int            @default(0)
+  floors         Int?
+  facing         String?
+  type           PropertyType
+  status         PropertyStatus @default(active)
+  source         String
+  sourceUrl      String?
+  rawHtmlPath    String?
+  contactPhone   String?
+  contactName    String?
+  dealScore      Int            @default(0)
+  riskScore      RiskLevel      @default(medium)
+  priceChangePct Decimal?       @db.Decimal(5, 2)
+  isVerified     Boolean        @default(false)
+  isDuplicate    Boolean        @default(false)
+  legalStatus    LegalStatus    @default(pending)
+  isUrgent       Boolean        @default(false)
+  imageUrls      String[]
+  amenities      String[]
+  lat            Decimal?       @db.Decimal(10, 7)
+  lng            Decimal?       @db.Decimal(10, 7)
+
+  // Relations
+  priceHistory   PriceHistory[]
+  leads          Lead[]
+  legalChecks    LegalCheck[]
+  savedBy        SavedProperty[]
+  scrapeJob      ScraperJob?    @relation(fields: [scrapeJobId], references: [id])
+  scrapeJobId    String?
+
+  scrapedAt      DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("properties")
+  @@index([area])
+  @@index([status])
+  @@index([price])
+  @@index([type])
+  @@index([dealScore])
+  @@index([scrapedAt(sort: Desc)])
+}
+
+model PriceHistory {
+  id         String   @id @default(cuid())
+  propertyId String
+  price      BigInt
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  recordedAt DateTime @default(now())
+
+  @@map("price_history")
+  @@index([propertyId, recordedAt(sort: Desc)])
+}
+
+model Lead {
+  id          String      @id @default(cuid())
+  propertyId  String?
+  assignedTo  String?
+  name        String
+  phone       String
+  email       String?
+  type        LeadType
+  urgency     LeadUrgency @default(warm)
+  score       Int         @default(50)
+  area        String?
+  budget      BigInt?
+  notes       String?
+  isConverted Boolean     @default(false)
+
+  property    Property?   @relation(fields: [propertyId], references: [id])
+  assignedUser User?      @relation("AssignedLeads", fields: [assignedTo], references: [id])
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("leads")
+  @@index([urgency])
+  @@index([assignedTo])
+}
+
+model Alert {
+  id       String        @id @default(cuid())
+  userId   String
+  type     AlertType
+  title    String
+  body     String
+  priority AlertPriority @default(medium)
+  read     Boolean       @default(false)
+  metadata Json?
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@map("alerts")
+  @@index([userId, read])
+}
+
+model AlertRule {
+  id           String    @id @default(cuid())
+  userId       String
+  type         AlertType
+  area         String?
+  maxPrice     BigInt?
+  minPrice     BigInt?
+  thresholdPct Decimal?  @db.Decimal(5, 2)
+  propertyType PropertyType?
+  isActive     Boolean   @default(true)
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+
+  @@map("alert_rules")
+}
+
+model LegalCheck {
+  id           String    @id @default(cuid())
+  propertyId   String
+  userId       String
+  riskScore    Int?
+  riskLevel    String?
+  checksPassed String[]
+  checksFailed String[]
+  warnings     String[]
+  reportUrl    String?
+  reportData   Json?
+
+  property     Property  @relation(fields: [propertyId], references: [id])
+  user         User      @relation(fields: [userId], references: [id])
+  checkedAt    DateTime  @default(now())
+
+  @@map("legal_checks")
+}
+
+model SavedProperty {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  note       String?
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, propertyId])
+  @@map("saved_properties")
+}
+
+model AreaStat {
+  id          String   @id @default(cuid())
+  area        String   @unique
+  district    String   @default("Dhaka")
+  avgPrice    Int
+  avgPricePerSqft Int?
+  totalListings Int    @default(0)
+  demandScore Int      @default(50)
+  growthPct   Decimal? @db.Decimal(5, 2)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("area_stats")
+}
+
+model ScraperJob {
+  id             String        @id @default(cuid())
+  source         String
+  status         ScraperStatus @default(pending)
+  listingsFound  Int           @default(0)
+  listingsNew    Int           @default(0)
+  listingsDupe   Int           @default(0)
+  errorMessage   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  properties     Property[]
+  createdAt      DateTime      @default(now())
+
+  @@map("scraper_jobs")
+  @@index([source, createdAt(sort: Desc)])
+}
+
+model ApiUsage {
+  id        String   @id @default(cuid())
+  apiKey    String
+  endpoint  String
+  method    String
+  statusCode Int
+  createdAt DateTime @default(now())
+
+  @@map("api_usage")
+  @@index([apiKey, createdAt(sort: Desc)])
+}
