@@ -8,7 +8,7 @@ export function useData<T>(fetcher: () => Promise<{ data: T }>, deps: any[] = []
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetch = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -21,9 +21,9 @@ export function useData<T>(fetcher: () => Promise<{ data: T }>, deps: any[] = []
     }
   }, deps)
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => { load() }, [load])
 
-  return { data, loading, error, refetch: fetch }
+  return { data, loading, error, refetch: load }
 }
 
 export function useKPIs() {

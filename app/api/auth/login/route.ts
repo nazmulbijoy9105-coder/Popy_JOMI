@@ -13,7 +13,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { email, password } = schema.parse(body)
 
-    const user = await prisma.user.findUnique({ where: { email } })
+    let user: any
+    try {
+      user = await prisma.user.findUnique({ where: { email } })
+    } catch {
+      return NextResponse.json({ error: 'Database unavailable. Please add DATABASE_URL in environment variables.' }, { status: 503 })
+    }
+
     if (!user || !user.password) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
