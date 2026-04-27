@@ -21,16 +21,36 @@ Go to [neon.tech](https://neon.tech) → Create project → Copy connection stri
 OR [render.com](https://render.com) → New PostgreSQL → Free tier
 
 ### Step 3 — Deploy to Vercel
+
+> ⚠️ **Critical:** The app will deploy but auth/login will show "Database unavailable" until you add these environment variables in Vercel.
+
 1. [vercel.com](https://vercel.com) → Add New Project → Import `Popy_JOMI`
-2. Add environment variables (see `.env.example`)
+2. **Before clicking Deploy**, go to **Environment Variables** and add:
+
+| Variable | Required | Value |
+|----------|----------|-------|
+| `DATABASE_URL` | ✅ Yes | PostgreSQL connection string from Neon/Render |
+| `JWT_SECRET` | ✅ Yes | Random 64-char hex string |
+| `NEXT_PUBLIC_APP_URL` | ✅ Yes | Your Vercel URL (e.g. `https://popy-jomi.vercel.app`) |
+| `OPENAI_API_KEY` | Optional | Only needed for AI property extraction |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS` | Optional | Only needed for email alerts |
+
+Generate a secure JWT secret:
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+
 3. Click **Deploy**
 
 ### Step 4 — Setup Database Schema
-After deploy, run in Vercel dashboard terminal:
+
+After deploy, run locally (with the same `DATABASE_URL`):
 ```bash
 npx prisma db push
 npx prisma db seed
 ```
+
+Or use Vercel's dashboard CLI terminal if available.
 
 ---
 

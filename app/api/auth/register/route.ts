@@ -16,7 +16,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const data = schema.parse(body)
 
-    const existing = await prisma.user.findUnique({ where: { email: data.email } })
+    let existing: any
+    try {
+      existing = await prisma.user.findUnique({ where: { email: data.email } })
+    } catch {
+      return NextResponse.json({ error: 'Database unavailable. Please add DATABASE_URL in environment variables.' }, { status: 503 })
+    }
     if (existing) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 })
     }
